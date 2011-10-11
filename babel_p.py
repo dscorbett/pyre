@@ -52,7 +52,7 @@ def t_error(t): # TODO: tailor to my needs
 
 lexer = lex.lex(debug=1)
 
-# Parsing
+# Parsing classes and global variables
 
 symbols = {}
 
@@ -88,13 +88,20 @@ class Symbol:
         else:
             self.minus.update(minus)
 
-def p_line_feature_signed(p):
+# Parsing rules
+
+def p_line_feature_minus(p):
     'line : MINUS ID COLON symbols'
-    '     | PLUS ID COLON symbols'
     for symbol in list(p[4]):
         if not symbol in symbols: symbols[symbol] = Symbol()
-        if p[1] == '-': symbols[symbol].subtract(set([p[2]]))
-        else: symbols[symbol].add(set([p[2]]))
+        symbols[symbol].subtract(set([p[2]]))
+        print '%s = %s' % (symbol, symbols[symbol])
+
+def p_line_feature_plus(p):
+    'line : PLUS ID COLON symbols'
+    for symbol in list(p[4]):
+        if not symbol in symbols: symbols[symbol] = Symbol()
+        symbols[symbol].add(set([p[2]]))
         print '%s = %s' % (symbol, symbols[symbol])
 
 def p_line_feature(p):
@@ -117,17 +124,17 @@ def p_line_symbol(p):
     'line : ID EQUALS features'
     if not p[1] in symbols: symbols[p[1]] = Symbol()
     (plus, minus) = p[3]
-    print 'plus: %s' % plus
-    print 'minus: %s' % minus
     for feature in plus: symbols[p[1]].add(set([feature]))
     for feature in minus: symbols[p[1]].subtract(set([feature]))
     print '%s = %s' % (p[1], symbols[p[1]])
 
-def p_features_base_signed(p):
+def p_features_base_minus(p):
     'features : MINUS ID'
-    '         | PLUS ID'
-    if p[1] == '-': p[0] = ([], [p[2]])
-    else: p[0] = ([p[2]], [])
+    p[0] = ([], [p[2]])
+
+def p_features_base_plus(p):
+    'features : PLUS ID'
+    p[0] = ([p[2]], [])
 
 def p_features_base(p):
     'features : ID'
@@ -140,9 +147,12 @@ def p_features_recursive(p):
 
 def p_features_recursive_signed(p):
     'features : features MINUS ID'
-    '         | features PLUS ID'
-    if p[2] == '-': p[1][1].append(p[3])
-    else: p[1][0].append(p[3])
+    p[1][1].append(p[3])
+    p[0] = p[1]
+
+def p_features_recursive_plus(p):
+    'features : features PLUS ID'
+    p[1][0].append(p[3])
     p[0] = p[1]
 
 # Running the program
@@ -150,7 +160,7 @@ def p_features_recursive_signed(p):
 parser = yacc.yacc()
 while True:
    try:
-       s = raw_input('What wouldstow lear me? >')
+       s = raw_input('What wouldstow lear me? ')
    except EOFError:
        break
    if not s: continue
