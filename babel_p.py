@@ -8,10 +8,10 @@ import re
 # Lexing
 
 tokens = ('TO', 'FROM', 'WHEN', 'BETWEEN',
-          'NUMBER', 'ID',
+          'NUMBER', 'ID', 'STAR', 'QUESTION', 'COMMA', 'PIPE',
           'LPAREN', 'RPAREN', 'LSQUARE', 'RSQUARE', 'LCURLY', 'RCURLY',
           'PLUS', 'MINUS', 'ALPHA', 'NALPHA',
-          'STAR', 'QUESTION', 'COMMA', 'PIPE', 'COLON', 'EQUALS')
+          'COLON', 'EQUALS', 'LPHONEME', 'RPHONEME')
 t_ignore = ' \t'
 t_TO = r'>'
 t_FROM = r'<'
@@ -34,6 +34,8 @@ t_COMMA = r','
 t_PIPE = r'\|'
 t_COLON = r':'
 t_EQUALS = r'='
+t_LPHONEME = r'\$'
+t_RPHONEME = r'\^'
 
 def t_NUMBER(t):
     r'\d+'
@@ -69,24 +71,29 @@ class Symbol:
             space = ' '
         return '[%s%s%s]' % (pluses, space, minuses)
 
-    def update(self, plus, minus):
-        if self.plus.union(plus).intersection(self.minus.union(minus)):
-            print "WARNING: Inconsistent feature update"
-        else:
-            self.plus.update(plus)
-            self.plus.update(minus)
-
     def add(self, plus):
         if self.minus.intersection(plus):
             print "WARNING: Inconsistent feature update"
         else:
             self.plus.update(plus)
+        return self
 
     def subtract(self, minus):
         if self.plus.intersection(minus):
             print "WARNING: Inconsistent feature update"
         else:
             self.minus.update(minus)
+        return self
+
+    def add_ow(self, plus):
+        self.minus.difference_update(plus)
+        self.plus.update(plus)
+        return self
+
+    def subtract_ow(self, minus):
+        self.plus.difference_update(minus)
+        self.minus.update(minus)
+        return self
 
 # Parsing rules
 
@@ -122,37 +129,43 @@ def p_symbols_recursive(p):
 
 def p_line_symbol(p):
     'line : ID EQUALS features'
-    if not p[1] in symbols: symbols[p[1]] = Symbol()
-    (plus, minus) = p[3]
-    for feature in plus: symbols[p[1]].add(set([feature]))
-    for feature in minus: symbols[p[1]].subtract(set([feature]))
+    if not p[1] in symbols: symbols[p[1]] = p[3]
+    else: symbols[p[1]].add(p[3].plus).subtract(p[3].minus)
     print '%s = %s' % (p[1], symbols[p[1]])
 
 def p_features_base_minus(p):
     'features : MINUS ID'
-    p[0] = ([], [p[2]])
+    p[0] = Symbol()
+    p[0].subtract_ow(set([p[2]]))
 
 def p_features_base_plus(p):
     'features : PLUS ID'
-    p[0] = ([p[2]], [])
+    p[0] = Symbol()
+    p[0].add_ow(set([p[2]]))
+
+def p_features_base_phoneme(p):
+    'features : LPHONEME ID RPHONEME'
+    if not p[2] in symbols: print 'Error: no such phoneme /%s/' % p[2]
+    p[0] = symbols[p[2]]
 
 def p_features_base(p):
     'features : ID'
-    p[0] = ([p[1]], [])
+    p[0] = Symbol()
+    p[0].add_ow(set([p[1]]))
 
-def p_features_recursive(p):
-    'features : features ID'
-    p[1][0].append(p[2])
-    p[0] = p[1]
-
-def p_features_recursive_signed(p):
+def p_features_recursive_minus(p):
     'features : features MINUS ID'
-    p[1][1].append(p[3])
+    p[1].subtract_ow(set([p[3]]))
     p[0] = p[1]
 
 def p_features_recursive_plus(p):
     'features : features PLUS ID'
-    p[1][0].append(p[3])
+    p[1].add_ow(set([p[3]]))
+    p[0] = p[1]
+
+def p_features_recursive(p):
+    'features : features ID'
+    p[1].add_ow(set([p[2]]))
     p[0] = p[1]
 
 # Running the program
@@ -160,7 +173,7 @@ def p_features_recursive_plus(p):
 parser = yacc.yacc()
 while True:
    try:
-       s = raw_input('What wouldstow lear me? ')
+       s = raw_input('Babel > ')
    except EOFError:
        break
    if not s: continue
