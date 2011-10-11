@@ -133,46 +133,36 @@ def p_line_symbol(p):
     else: symbols[p[1]].add(p[3].plus).subtract(p[3].minus)
     print '%s = %s' % (p[1], symbols[p[1]])
 
-def p_features_base_minus(p):
-    'features : MINUS ID'
-    p[0] = Symbol()
-    p[0].subtract_ow(set([p[2]]))
-
-def p_features_base_plus(p):
-    'features : PLUS ID'
-    p[0] = Symbol()
-    p[0].add_ow(set([p[2]]))
-
-def p_features_base_phoneme(p):
-    'features : LPHONEME ID RPHONEME'
-    if not p[2] in symbols: print 'Error: no such phoneme /%s/' % p[2]
-    p[0] = Symbol()
-    p[0].add_ow(symbols[p[2]].plus).subtract_ow(symbols[p[2]].minus)
-
 def p_features_base(p):
-    'features : ID'
-    p[0] = Symbol()
-    p[0].add_ow(set([p[1]]))
-
-def p_features_recursive_phoneme(p):
-    'features : features LPHONEME ID RPHONEME'
-    p[1].add_ow(p[3].plus).subtract_ow(p[3].minus)
-    p[0] = p[1]
-
-def p_features_recursive_minus(p):
-    'features : features MINUS ID'
-    p[1].subtract_ow(set([p[3]]))
-    p[0] = p[1]
-
-def p_features_recursive_plus(p):
-    'features : features PLUS ID'
-    p[1].add_ow(set([p[3]]))
+    'features : feature'
     p[0] = p[1]
 
 def p_features_recursive(p):
-    'features : features ID'
-    p[1].add_ow(set([p[2]]))
+    'features : features feature'
+    p[1].add_ow(p[2].plus).subtract_ow(p[2].minus)
     p[0] = p[1]
+
+def p_feature(p):
+    'feature : ID'
+    p[0] = Symbol()
+    p[0].add_ow(set([p[1]]))
+
+def p_feature_plus(p):
+    'feature : PLUS ID'
+    p[0] = Symbol()
+    p[0].add_ow(set([p[2]]))
+
+def p_feature_minus(p):
+    'feature : MINUS ID'
+    p[0] = Symbol()
+    p[0].subtract_ow(set([p[2]]))
+
+def p_feature_phoneme(p):
+    'feature : LPHONEME ID RPHONEME'
+    if not p[2] in symbols: print('Error: no such phoneme %s%s%s' %
+                                  (LPHONEME, p[2], RPHONEME))
+    p[0] = Symbol()
+    p[0].add_ow(symbols[p[2]].plus).subtract_ow(symbols[p[2]].minus)
 
 # Running the program
 
