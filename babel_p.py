@@ -57,11 +57,11 @@ def t_error(t): # TODO: tailor to my needs
 
 lexer = lex.lex()
 
-# Symbols and features
+# Phonemes and features
 
 symbols = {}
 
-class Symbol:
+class Phoneme:
     def __init__(self, plus=set(), minus=set(), ow=True, copy=None):
         self.plus = set()
         self.minus = set()
@@ -75,8 +75,8 @@ class Symbol:
             self.add_ow(plus)
             self.subtract_ow(minus)
         else:
-            self.add(plus)
-            self.subtract(minus)
+            self.add_ud(plus)
+            self.subtract_ud(minus)
 
     def __repr__(self):
         pluses = ' '.join([('+%s' % plus) for plus in self.plus])
@@ -86,14 +86,14 @@ class Symbol:
             space = ' '
         return '[%s%s%s]' % (pluses, space, minuses)
 
-    def add(self, plus):
+    def add_ud(self, plus):
         if self.minus.intersection(plus):
             sys.stderr.write("Warning: Inconsistent feature update\n")
         else:
             self.plus.update(plus)
         return self
 
-    def subtract(self, minus):
+    def subtract_ud(self, minus):
         if self.plus.intersection(minus):
             sys.stderr.write("Warning: Inconsistent feature update\n")
         else:
@@ -119,77 +119,79 @@ class Symbol:
         return (not (self.plus.symmetric_difference(other.plus) or
                      self.minus.symmetric_difference(other.minus)))
 
-def p_line_feature_minus(p):
-    'line : MINUS ID COLON new_symbols'
-    for symbol in list(p[4]):
-        if not symbol in symbols: symbols[symbol] = Symbol()
-        symbols[symbol].subtract(set([p[2]]))
-        print('%s = %s' % (symbol, symbols[symbol]))
-
-def p_line_feature_plus(p):
-    'line : PLUS ID COLON new_symbols'
-    for symbol in list(p[4]):
-        if not symbol in symbols: symbols[symbol] = Symbol()
-        symbols[symbol].add(set([p[2]]))
-        print('%s = %s' % (symbol, symbols[symbol]))
-
 def p_line_feature(p):
-    'line : ID COLON new_symbols'
+    'line : feature COLON new_symbols'
+    # None : Phoneme Constant List(String)
     for symbol in list(p[3]):
-        if not symbol in symbols: symbols[symbol] = Symbol()
-        symbols[symbol].add(set([p[1]]))
+        if not symbol in symbols: symbols[symbol] = Phoneme()
+        symbols[symbol].add_ud(p[1].plus).subtract_ud(p[1].minus)
         print('%s = %s' % (symbol, symbols[symbol]))
+
+def p_line_symbol(p):
+    'line : ID EQUALS features'
+    # None : String Constant Phoneme
+    if not p[1] in symbols: symbols[p[1]] = p[3]
+    else: symbols[p[1]].add_ud(p[3].plus).subtract_ud(p[3].minus)
+    print('%s = %s' % (p[1], symbols[p[1]]))
 
 def p_new_symbols_base(p):
     'new_symbols : ID'
+    # List(String) : String
     p[0] = set([p[1]])
 
 def p_new_symbols_recursive(p):
     'new_symbols : new_symbols ID'
+    # List(String) : List(String) String
     p[1].add(p[2])
     p[0] = p[1]
 
-def p_line_symbol(p):
-    'line : ID EQUALS features'
-    if not p[1] in symbols: symbols[p[1]] = p[3]
-    else: symbols[p[1]].add(p[3].plus).subtract(p[3].minus)
-    print('%s = %s' % (p[1], symbols[p[1]]))
-
 def p_features_base(p):
-    'features : feature'
+    'features : feature_or_phoneme'
+    # Phoneme : Phoneme
     p[0] = p[1]
 
 def p_features_recursive(p):
-    'features : features feature'
+    'features : features feature_or_phoneme'
+    # Phoneme : Phoneme Phoneme
     p[1].add_ow(p[2].plus).subtract_ow(p[2].minus)
     p[0] = p[1]
 
-def p_feature(p):
-    'feature : ID'
-    p[0] = Symbol()
-    p[0].add_ow(set([p[1]]))
+def p_feature_or_phoneme(p):
+    '''
+    feature_or_phoneme : phoneme
+                       | feature
+    '''
+    # Phoneme : Phoneme
+    p[0] = p[1]
 
 def p_feature_plus(p):
     'feature : PLUS ID'
-    p[0] = Symbol()
-    p[0].add_ow(set([p[2]]))
+    # Phoneme : Constant String
+    p[0] = Phoneme(plus=set([p[2]]))
 
 def p_feature_minus(p):
     'feature : MINUS ID'
-    p[0] = Symbol()
-    p[0].subtract_ow(set([p[2]]))
+    # Phoneme : Constant String
+    p[0] = Phoneme(minus=set([p[2]]))
 
-def p_feature_phoneme(p):
-    'feature : LPHONEME symbol RPHONEME'
+def p_feature(p):
+    'feature : ID'
+    # Phoneme : String
+    p[0] = Phoneme(plus=set([p[1]]))
+
+def p_phoneme(p):
+    'phoneme : LPHONEME valid_symbol RPHONEME'
+    # Phoneme : Constant Phoneme Constant
     p[0] = p[2]
 
-def p_symbol(p):
-    'symbol : ID'
+def p_valid_symbol(p):
+    'valid_symbol : ID'
+    # Phoneme : String
     if not p[1] in symbols:
         sys.stderr.write('Error: No such phoneme %s%s%s\n' %
                          (t_LPHONEME, p[1], t_RPHONEME))
         raise SyntaxError
-    p[0] = Symbol(copy=symbols[p[1]])
+    p[0] = Phoneme(copy=symbols[p[1]])
 
 # Constraints
 
@@ -207,8 +209,8 @@ class Constraint:
             self.antecedent = None
             self.consequent = None
         else:
-            self.antecedent = Symbol(copy=antecedent)
-            self.consequent = Symbol(copy=consequent)
+            self.antecedent = Phoneme(copy=antecedent)
+            self.consequent = Phoneme(copy=consequent)
 
     def __repr__(self):
         return '%s %s %s' % (self.antecedent, t_IMPLIEDBY, self.consequent)
