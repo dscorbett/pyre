@@ -12,7 +12,7 @@ tokens = ('TO', 'FROM', 'WHEN', 'BETWEEN',
           'NUMBER', 'ID', 'STAR', 'QUESTION', 'COMMA', 'PIPE',
           'LPAREN', 'RPAREN', 'LSQUARE', 'RSQUARE', 'LCURLY', 'RCURLY',
           'PLUS', 'MINUS', 'ALPHA', 'NALPHA',
-          'COLON', 'EQUALS', 'LPHONEME', 'RPHONEME')
+          'COLON', 'EQUALS', 'IMPLIEDBY', 'EQUIV', 'LPHONEME', 'RPHONEME')
 t_ignore = ' \t'
 t_TO = r'>'
 t_FROM = r'<'
@@ -35,6 +35,8 @@ t_COMMA = r','
 t_PIPE = r'\|'
 t_COLON = r':'
 t_EQUALS = r'='
+t_IMPLIEDBY = r'<='
+t_EQUIV = r'=='
 t_LPHONEME = r'`'
 t_RPHONEME = r"'"
 
@@ -53,16 +55,28 @@ def t_error(t): # TODO: tailor to my needs
 
 # Building the lexer
 
-lexer = lex.lex(debug=1)
+lexer = lex.lex()
 
-# Parsing classes and global variables
+# Symbols and features
 
 symbols = {}
 
 class Symbol:
-    def __init__(self):
+    def __init__(self, plus=set(), minus=set(), ow=True, copy=None):
         self.plus = set()
         self.minus = set()
+        if copy is None:
+            plus = plus.copy()
+            minus = minus.copy()
+        else:
+            plus = copy.plus.copy()
+            minus = copy.minus.copy()
+        if ow:
+            self.add_ow(plus)
+            self.subtract_ow(minus)
+        else:
+            self.add(plus)
+            self.subtract(minus)
 
     def __repr__(self):
         pluses = ' '.join([('+%s' % plus) for plus in self.plus])
@@ -74,14 +88,14 @@ class Symbol:
 
     def add(self, plus):
         if self.minus.intersection(plus):
-            sys.stderr.write("Warning: Inconsistent feature update")
+            sys.stderr.write("Warning: Inconsistent feature update\n")
         else:
             self.plus.update(plus)
         return self
 
     def subtract(self, minus):
         if self.plus.intersection(minus):
-            sys.stderr.write("Warning: Inconsistent feature update")
+            sys.stderr.write("Warning: Inconsistent feature update\n")
         else:
             self.minus.update(minus)
         return self
@@ -96,35 +110,42 @@ class Symbol:
         self.minus.update(minus)
         return self
 
-# Parsing rules
+    def contradicts(self, other):
+        # TODO: This can easily be optimized if necessary.
+        return (self.plus.intersection(other.minus) or
+                self.minus.intersection(other.plus))
+
+    def matches(self, other):
+        return (not (self.plus.symmetric_difference(other.plus) or
+                     self.minus.symmetric_difference(other.minus)))
 
 def p_line_feature_minus(p):
-    'line : MINUS ID COLON symbols'
+    'line : MINUS ID COLON new_symbols'
     for symbol in list(p[4]):
         if not symbol in symbols: symbols[symbol] = Symbol()
         symbols[symbol].subtract(set([p[2]]))
         print('%s = %s' % (symbol, symbols[symbol]))
 
 def p_line_feature_plus(p):
-    'line : PLUS ID COLON symbols'
+    'line : PLUS ID COLON new_symbols'
     for symbol in list(p[4]):
         if not symbol in symbols: symbols[symbol] = Symbol()
         symbols[symbol].add(set([p[2]]))
         print('%s = %s' % (symbol, symbols[symbol]))
 
 def p_line_feature(p):
-    'line : ID COLON symbols'
+    'line : ID COLON new_symbols'
     for symbol in list(p[3]):
         if not symbol in symbols: symbols[symbol] = Symbol()
         symbols[symbol].add(set([p[1]]))
         print('%s = %s' % (symbol, symbols[symbol]))
 
-def p_symbols_base(p):
-    'symbols : ID'
+def p_new_symbols_base(p):
+    'new_symbols : ID'
     p[0] = set([p[1]])
 
-def p_symbols_recursive(p):
-    'symbols : symbols ID'
+def p_new_symbols_recursive(p):
+    'new_symbols : new_symbols ID'
     p[1].add(p[2])
     p[0] = p[1]
 
@@ -165,11 +186,38 @@ def p_feature_phoneme(p):
 def p_symbol(p):
     'symbol : ID'
     if not p[1] in symbols:
-        sys.stderr.write('Error: No such phoneme %s%s%s' %
+        sys.stderr.write('Error: No such phoneme %s%s%s\n' %
                          (t_LPHONEME, p[1], t_RPHONEME))
         raise SyntaxError
-    p[0] = Symbol()
-    p[0].add_ow(symbols[p[1]].plus).subtract_ow(symbols[p[1]].minus)
+    p[0] = Symbol(copy=symbols[p[1]])
+
+# Constraints
+
+class Constraint:
+    def __init__(self, antecedent, consequent):
+        error = False
+        if antecedent.contradicts(consequent): error = True
+        else:
+            for constraint in constraints:
+                error = (antecedent.contradicts(constraint.consequent) or
+                         consequent.contradicts(constraint.antecedent))
+                if error: break
+        if error:
+            sys.stderr.write('Error: Contradiction of constraints\n')
+            self.antecedent = None
+            self.consequent = None
+        else:
+            self.antecedent = Symbol(copy=antecedent)
+            self.consequent = Symbol(copy=consequent)
+
+    def __repr__(self):
+        return '%s %s %s' % (self.antecedent, t_IMPLIEDBY, self.consequent)
+
+def p_line_converse_implication(p):
+    'line : feature IMPLIEDBY features'
+    print '%s %s %s' % (p[1], t_IMPLIEDBY, p[3])
+    #c = add_constraint(p[1], p[3])
+    #print(c)
 
 # Running the program
 
