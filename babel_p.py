@@ -15,7 +15,7 @@ tokens = ('TO', 'FROM', 'WHEN', 'BETWEEN',
 t_ignore = ' \t'
 t_TO = r'>'
 t_FROM = r'<'
-t_WHEN = r'/'
+t_WHEN = r'\/'
 t_BETWEEN = r'_'
 t_ID = r'[a-zA-Z0-9]+'
 t_LPAREN = r'\('
@@ -34,8 +34,8 @@ t_COMMA = r','
 t_PIPE = r'\|'
 t_COLON = r':'
 t_EQUALS = r'='
-t_LPHONEME = r'\$'
-t_RPHONEME = r'\^'
+t_LPHONEME = r'`'
+t_RPHONEME = r'\''
 
 def t_NUMBER(t):
     r'\d+'
@@ -146,12 +146,18 @@ def p_features_base_plus(p):
 def p_features_base_phoneme(p):
     'features : LPHONEME ID RPHONEME'
     if not p[2] in symbols: print 'Error: no such phoneme /%s/' % p[2]
-    p[0] = symbols[p[2]]
+    p[0] = Symbol()
+    p[0].add_ow(symbols[p[2]].plus).subtract_ow(symbols[p[2]].minus)
 
 def p_features_base(p):
     'features : ID'
     p[0] = Symbol()
     p[0].add_ow(set([p[1]]))
+
+def p_features_recursive_phoneme(p):
+    'features : features LPHONEME ID RPHONEME'
+    p[1].add_ow(p[3].plus).subtract_ow(p[3].minus)
+    p[0] = p[1]
 
 def p_features_recursive_minus(p):
     'features : features MINUS ID'
