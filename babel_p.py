@@ -137,9 +137,36 @@ class Phoneme:
         """
         return not self == other
 
+    def issubset(self, other):
+        """
+        Return whether this phoneme is a subset of another.
+
+        A phoneme is a subset of another if every feature of the one appears in
+        the other with the same sign.
+
+        Arguments:
+        other : the phoneme which might be a superset
+        """
+        for feature in self.features.keys():
+            if other.features.has_key(feature):
+                if self[feature] != other[feature]:
+                    return False
+            else:
+                return False
+        return True
+
     def __le__(self, other):
-        # TODO: doc
-        return self.issubset(other)
+        """
+        Return whether this phoneme is a subset of an object.
+
+        This is similar to issubset, except that __le__ does not assume that
+        the other object is a phoneme.
+
+        Arguments:
+        other : the object to test subsethood against
+        """
+        
+        return isinstance(other, Phoneme) and self.issubset(other)
 
     def __hash__(self): # Is this useful?
         # TODO: doc
@@ -187,24 +214,6 @@ class Phoneme:
         other : the phoneme to get the new signed features from
         """
         self.features.update(other.features)
-
-    def issubset(self, other):
-        """
-        Return whether this phoneme is a subset of another.
-
-        A phoneme is a subset of another if every feature of the one appears in
-        the other with the same sign.
-
-        Arguments:
-        other : the phoneme which might be a superset
-        """
-        for feature in self.features.keys():
-            if other.features.has_key(feature):
-                if self[feature] != other[feature]:
-                    return False
-            else:
-                return False
-        return True
 
     def copy(self):
         """Return a copy of this phoneme."""
