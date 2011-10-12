@@ -12,7 +12,8 @@ tokens = ('TO', 'FROM', 'WHEN', 'BETWEEN',
           'NUMBER', 'ID', 'STAR', 'QUESTION', 'COMMA', 'PIPE',
           'LPAREN', 'RPAREN', 'LSQUARE', 'RSQUARE', 'LCURLY', 'RCURLY',
           'PLUS', 'MINUS', 'ALPHA', 'NALPHA',
-          'COLON', 'EQUALS', 'IMPLIEDBY', 'EQUIV', 'LPHONEME', 'RPHONEME')
+          'EQUALS', 'COLON', 'IMPLIES', 'IMPLIEDBY', 'EQUIV',
+          'LPHONEME', 'RPHONEME')
 t_ignore = ' \t'
 t_TO = r'>'
 t_FROM = r'<'
@@ -31,8 +32,9 @@ t_STAR = r'\*'
 t_QUESTION = r'\?'
 t_COMMA = r','
 t_PIPE = r'\|'
-t_COLON = r':'
 t_EQUALS = r'='
+t_COLON = r':'
+t_IMPLIES = r'=>'
 t_IMPLIEDBY = r'<='
 t_EQUIV = r'=='
 t_LPHONEME = r'`'
@@ -57,9 +59,9 @@ def t_newline(t):
     r'(\n|\r|\f)+'
     t.lexer.lineno += len(t.value)
 
-def t_error(t): # TODO: tailor to my needs
+def t_error(t):
     """Print an error when an illegal character is found."""
-    print("Illegal character '%s'" % t.value[0])
+    sys.stderr.write("Warning: Illegal character '%s'\n" % t.value[0])
     t.lexer.skip(1)
 
 # Building the lexer
@@ -163,13 +165,13 @@ class Phoneme:
         the other object is a phoneme.
 
         Arguments:
-        other : the object to test subsethood against
+        other : the object which might be a subset
         """
         
         return isinstance(other, Phoneme) and self.issubset(other)
 
-    def __hash__(self): # Is this useful?
-        # TODO: doc
+    def __hash__(self):
+        """Return a hash code for this phoneme."""
         return (hash(tuple(self.features.keys())) ^
                 hash(tuple(self.features.values())))
 
@@ -339,22 +341,28 @@ def add_constraint(key, value):
             #   worthwhile = False
             #   break
             if antecedent <= key and value <= consequent:
-                sys.stderr.write('%s <= %s and %s <= %s\n' %
-                                 (antecedent, key, value, consequent))
+                print('%s <= %s and %s <= %s' %
+                      (antecedent, key, value, consequent))
                 worthwhile = False
                 break
             if key <= antecedent and consequent <= value:
-                sys.stderr.write('%s <= %s and %s <= %s\n' %
-                                 (key, antecedent, consequent, value))
+                print('%s <= %s and %s <= %s' %
+                      (key, antecedent, consequent, value))
                 del constraints[antecedent]
         if worthwhile:
             if constraints.has_key(key): constraints[key].edit(value)
             else: constraints[key] = value
 
-def p_converse_implication(p):
-    'line : feature IMPLIEDBY features'
+def p_implication(p):
+    'line : features IMPLIES features'
     # None : Phoneme Constant Phoneme
-    add_constraint(p[3], p[1].copy())
+    add_constraint(p[1], p[3])
+    print constraints
+
+def p_converse_implication(p):
+    'line : features IMPLIEDBY features'
+    # None : Phoneme Constant Phoneme
+    add_constraint(p[3], p[1])
     print constraints
 
 # Running the program
