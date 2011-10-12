@@ -25,8 +25,6 @@ t_LSQUARE = r'\['
 t_RSQUARE = r'\]'
 t_LCURLY = r'\{'
 t_RCURLY = r'\}'
-t_PLUS = r'\+'
-t_MINUS = r'-'
 t_ALPHA = r'@'
 t_NALPHA = r'-@'
 t_STAR = r'\*'
@@ -39,6 +37,16 @@ t_IMPLIEDBY = r'<='
 t_EQUIV = r'=='
 t_LPHONEME = r'`'
 t_RPHONEME = r"'"
+
+def t_PLUS(t):
+    r'\+'
+    t.value = True
+    return t
+
+def t_MINUS(t):
+    r'-'
+    t.value = False
+    return t
 
 def t_NUMBER(t):
     r'\d+'
@@ -88,6 +96,14 @@ class Phoneme:
         self.features.update({f: True for f in plus})
         self.features.update({f: False for f in minus})
 
+    def __repr__(self):
+        """
+        Return a formal representation of this phoneme as a string.
+
+        Actually, it is not formal.
+        """
+        return str(self)
+    
     def __str__(self):
         """
         Return an informal representation of this phoneme as a string.
@@ -209,6 +225,14 @@ class Phoneme:
     def follow_implications(self):
         pass #TODO
 
+def p_error(p):
+    """Fail, and go to the next line."""
+    sys.stderr.write('Syntax error on line %d\n' % p.lexer.lineno)
+    while True:
+        tok = yacc.token()
+        if not tok: break
+    yacc.restart()
+
 def p_line_feature(p):
     'line : feature COLON new_symbols'
     # None : Phoneme Constant List(String)
@@ -252,20 +276,18 @@ def p_features_recursive(p):
     p[1].update(p[2])
     p[0] = p[1]
 
-def p_feature_plus(p):
-    'feature : PLUS ID'
+def p_feature_explicit(p):
+    '''
+    feature : PLUS ID
+            | MINUS ID
+    '''
     # Phoneme : Constant String
-    p[0] = Phoneme(plus=set([p[2]]))
+    p[0] = Phoneme({f: p[1] for f in set([p[2]])})
 
-def p_feature_minus(p):
-    'feature : MINUS ID'
-    # Phoneme : Constant String
-    p[0] = Phoneme(minus=set([p[2]]))
-
-def p_feature(p):
+def p_feature_default(p):
     'feature : ID'
     # Phoneme : String
-    p[0] = Phoneme(plus=set([p[1]]))
+    p[0] = Phoneme({f: True for f in set([p[1]])})
 
 def p_phoneme(p):
     'phoneme : LPHONEME valid_symbol RPHONEME'
@@ -311,6 +333,12 @@ def add_constraint(key, value):
             if key <= antecedent and consequent <= value:
                 del constraints[antecedent]
         if worthwhile: constraints[key] = value
+
+def p_converse_implication(p):
+    'line : ID IMPLIEDBY features'
+    # None : String Constant Phoneme
+    add_constraint(p[3], Phoneme(plus=set([p[1]])))
+    print constraints
 
 # Running the program
 
