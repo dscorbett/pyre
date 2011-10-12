@@ -50,6 +50,7 @@ def t_newline(t):
     t.lexer.lineno += len(t.value)
 
 def t_error(t): # TODO: tailor to my needs
+    """Print an error when an illegal character is found."""
     print("Illegal character '%s'" % t.value[0])
     t.lexer.skip(1)
 
@@ -62,76 +63,165 @@ lexer = lex.lex()
 symbols = {}
 
 class Phoneme:
-    def __init__(self, plus=set(), minus=set(), ow=True, copy=None):
-        self.plus = set()
-        self.minus = set()
-        if copy is None:
-            plus = plus.copy()
-            minus = minus.copy()
-        else:
-            plus = copy.plus.copy()
-            minus = copy.minus.copy()
-        if ow:
-            self.add_ow(plus)
-            self.subtract_ow(minus)
-        else:
-            self.add_ud(plus)
-            self.subtract_ud(minus)
+    """
+    A wrapper class for a dictionary from features to Booleans.
 
-    def __repr__(self):
-        pluses = ' '.join([('+%s' % plus) for plus in self.plus])
-        minuses = ' '.join([('-%s' % minus) for minus in self.minus])
-        space = ''
-        if len(pluses) and len(minuses):
-            space = ' '
-        return '[%s%s%s]' % (pluses, space, minuses)
+    A phoneme is a set of signed features. A signed feature is a feature (for
+    example, voice) paired with a sign (+ or -). Unspecified features (for
+    example, the place of articulation of the Japanese moraic n) are specified
+    by their absence from the phoneme.
 
-    def add_ud(self, plus):
-        if self.minus.intersection(plus):
-            sys.stderr.write("Warning: Inconsistent feature update\n")
-        else:
-            self.plus.update(plus)
-        return self
+    The purpose of this wrapper class is to maintain the invariants of
+    phonemes, which are specified by constraints.
+    """
 
-    def subtract_ud(self, minus):
-        if self.plus.intersection(minus):
-            sys.stderr.write("Warning: Inconsistent feature update\n")
-        else:
-            self.minus.update(minus)
-        return self
+    def __init__(self, features=dict(), plus=set(), minus=set()):
+        """
+        Create a new phoneme.
 
-    def add_ow(self, plus):
-        self.minus.difference_update(plus)
-        self.plus.update(plus)
-        return self
+        Optional arguments:
+        features : a dictionary from features to Booleans
+        plus : a set of positive features
+        minus : a set of negative features
+        """
+        self.features = features.copy()
+        self.features.update({f: True for f in plus})
+        self.features.update({f: False for f in minus})
 
-    def subtract_ow(self, minus):
-        self.plus.difference_update(minus)
-        self.minus.update(minus)
-        return self
+    def __str__(self):
+        """
+        Return an informal representation of this phoneme as a string.
+
+        Features are listed in alphabetical order with a '+' or '-' prefix as
+        appropriate.
+        """
+        signed_strings = []
+        for key in sorted(self.features.keys()):
+            if self[key]: signed_strings.append('+%s' % key)
+            else: signed_strings.append('-' + key)
+        return '[%s]' % ' '.join(signed_strings)
+
+    def __eq__(self, other):
+        """
+        Return whether this phoneme's features equal another's.
+
+        Arguments:
+        other : the object to test equality against
+        """
+        if not isinstance(other, Phoneme): return False
+        if len(self.features) != len(other.features): return False
+        return self <= other
+
+    def __ne__(self, other):
+        """
+        Return whether this phoneme does not equal an object.
+
+        Arguments:
+        other : the object to test inequality against
+        """
+        return not self == other
+
+    def __le__(self, other):
+        # TODO: doc
+        return self.issubset(other)
+
+    def __hash__(self): # Is this useful?
+        # TODO: doc
+        return (hash(tuple(self.features.keys())) ^
+                hash(tuple(self.features.values())))
 
     def contradicts(self, other):
-        # TODO: This can easily be optimized if necessary.
-        return (self.plus.intersection(other.minus) or
-                self.minus.intersection(other.plus))
+        """
+        Return whether this phoneme contradicts another.
 
-    def matches(self, other):
-        return (not (self.plus.symmetric_difference(other.plus) or
-                     self.minus.symmetric_difference(other.minus)))
+        Phonemes contradict each other when any feature of one appears in the
+        other with a different sign.
+
+        Arguments:
+        other : the phoneme to compare against
+        """
+        for feature in self.features.keys():
+            if (other.features.has_key(feature) and
+                self[feature] != other[feature]):
+                return True
+        return False
+
+    def edit(self, other):
+        """
+        Add another phoneme's signed features, unless they contradict.
+
+        Return this phoneme.
+
+        Arguments:
+        other : the phoneme to get the new signed features from
+        """
+        if self.contradicts(other):
+            sys.stderr.write("Warning: Inconsistent feature update\n")
+        else:
+            self.update(other)
+        return self
+
+    def update(self, other):
+        """
+        Add another phoneme's signed features, overwriting in case of conflict.
+
+        Return this phoneme.
+
+        Arguments:
+        other : the phoneme to get the new signed features from
+        """
+        self.features.update(other.features)
+
+    def issubset(self, other):
+        """
+        Return whether this phoneme is a subset of another.
+
+        A phoneme is a subset of another if every feature of the one appears in
+        the other with the same sign.
+
+        Arguments:
+        other : the phoneme which might be a superset
+        """
+        for feature in self.features.keys():
+            if other.features.has_key(feature):
+                if self[feature] != other[feature]:
+                    return False
+            else:
+                return False
+        return True
+
+    def copy(self):
+        """Return a copy of this phoneme."""
+        return Phoneme(self.features)
+
+    def __getitem__(self, key):
+        """
+        Return the sign of a feature as a Boolean, or None if it is absent.
+
+        Arguments:
+        key : the feature whose sign is wanted
+        """
+        try:
+            return self.features[key]
+        except KeyError:
+            return None
+
+    def follow_implications(self):
+        pass #TODO
 
 def p_line_feature(p):
     'line : feature COLON new_symbols'
     # None : Phoneme Constant List(String)
     for symbol in list(p[3]):
         if not symbol in symbols: symbols[symbol] = Phoneme()
-        symbols[symbol].add_ud(p[1].plus).subtract_ud(p[1].minus)
+        symbols[symbol].update(p[1])
         print('%s = %s' % (symbol, symbols[symbol]))
 
 def p_line_symbol(p):
     'line : ID EQUALS features'
     # None : String Constant Phoneme
     if not p[1] in symbols: symbols[p[1]] = p[3]
-    else: symbols[p[1]].add_ud(p[3].plus).subtract_ud(p[3].minus)
+    else: symbols[p[1]].edit(p[3])
     print('%s = %s' % (p[1], symbols[p[1]]))
 
 def p_new_symbols_base(p):
@@ -153,10 +243,10 @@ def p_features_base(p):
 def p_features_recursive(p):
     'features : features feature_or_phoneme'
     # Phoneme : Phoneme Phoneme
-    p[1].add_ow(p[2].plus).subtract_ow(p[2].minus)
+    p[1].update(p[2])
     p[0] = p[1]
 
-def p_feature_or_phoneme(p):
+def p_feature_or_phoneme(p): # TODO: get rid of this silly token
     '''
     feature_or_phoneme : phoneme
                        | feature
@@ -191,35 +281,38 @@ def p_valid_symbol(p):
         sys.stderr.write('Error: No such phoneme %s%s%s\n' %
                          (t_LPHONEME, p[1], t_RPHONEME))
         raise SyntaxError
-    p[0] = Phoneme(copy=symbols[p[1]])
+    p[0] = symbols[p[1]].copy()
 
 # Constraints
 
-class Constraint:
-    def __init__(self, antecedent, consequent):
-        error = False
-        if antecedent.contradicts(consequent): error = True
-        else:
-            for constraint in constraints:
-                error = (antecedent.contradicts(constraint.consequent) or
-                         consequent.contradicts(constraint.antecedent))
-                if error: break
-        if error:
-            sys.stderr.write('Error: Contradiction of constraints\n')
-            self.antecedent = None
-            self.consequent = None
-        else:
-            self.antecedent = Phoneme(copy=antecedent)
-            self.consequent = Phoneme(copy=consequent)
+constraints = {}
 
-    def __repr__(self):
-        return '%s %s %s' % (self.antecedent, t_IMPLIEDBY, self.consequent)
+def add_constraint(key, value):
+    """
+    Add a new key-value pair to the dictionary of constraints.
 
-def p_line_converse_implication(p):
-    'line : feature IMPLIEDBY features'
-    print '%s %s %s' % (p[1], t_IMPLIEDBY, p[3])
-    #c = add_constraint(p[1], p[3])
-    #print(c)
+    A constraint is only added if it is self-consistent, it is not redundant
+    with any previous constraints, and it does not contradict any previous
+    constraints. If any previous constraint is found to be redundant with it,
+    the previous one is replaced.
+
+    Arguments:
+    key : the antecedent phoneme
+    value : the consequent phoneme
+    """
+    if not key.contradicts(value):
+        worthwhile = True
+        for antecedent in constraints.copy():
+            consequent = constraints[antecedent]
+            if antecedent <= key and value.contradicts(consequent):
+                worthwhile = False
+                break
+            if antecedent <= key and value <= consequent:
+                worthwhile = False
+                break
+            if key <= antecedent and consequent <= value:
+                del constraints[antecedent]
+        if worthwhile: constraints[key] = value
 
 # Running the program
 
