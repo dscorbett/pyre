@@ -236,22 +236,20 @@ def p_new_symbols_recursive(p):
     p[0] = p[1]
 
 def p_features_base(p):
-    'features : feature_or_phoneme'
+    '''
+    features : phoneme
+             | feature
+    '''
     # Phoneme : Phoneme
     p[0] = p[1]
 
 def p_features_recursive(p):
-    'features : features feature_or_phoneme'
+    '''
+    features : features phoneme
+             | features feature
+    '''
     # Phoneme : Phoneme Phoneme
     p[1].update(p[2])
-    p[0] = p[1]
-
-def p_feature_or_phoneme(p): # TODO: get rid of this silly token
-    '''
-    feature_or_phoneme : phoneme
-                       | feature
-    '''
-    # Phoneme : Phoneme
     p[0] = p[1]
 
 def p_feature_plus(p):
