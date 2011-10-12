@@ -324,20 +324,28 @@ def add_constraint(key, value):
         worthwhile = True
         for antecedent in constraints.copy():
             consequent = constraints[antecedent]
-            if antecedent <= key and value.contradicts(consequent):
-                worthwhile = False
-                break
+            #if antecedent <= key and value.contradicts(consequent):
+            #   sys.stderr.write('%s <= %s and %s.contradicts(%s)\n' %
+            #                    (antecedent, key, value, consequent))
+            #   worthwhile = False
+            #   break
             if antecedent <= key and value <= consequent:
+                sys.stderr.write('%s <= %s and %s <= %s\n' %
+                                 (antecedent, key, value, consequent))
                 worthwhile = False
                 break
             if key <= antecedent and consequent <= value:
+                sys.stderr.write('%s <= %s and %s <= %s\n' %
+                                 (key, antecedent, consequent, value))
                 del constraints[antecedent]
-        if worthwhile: constraints[key] = value
+        if worthwhile:
+            if constraints.has_key(key): constraints[key].edit(value)
+            else: constraints[key] = value
 
 def p_converse_implication(p):
-    'line : ID IMPLIEDBY features'
-    # None : String Constant Phoneme
-    add_constraint(p[3], Phoneme(plus=set([p[1]])))
+    'line : feature IMPLIEDBY features'
+    # None : Phoneme Constant Phoneme
+    add_constraint(p[3], p[1].copy())
     print constraints
 
 # Running the program
