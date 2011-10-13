@@ -19,7 +19,7 @@ t_TO = r'>'
 t_FROM = r'<'
 t_WHEN = r'\/'
 t_BETWEEN = r'_'
-t_ID = r'[a-zA-Z0-9]+'
+t_ID = r'[a-zA-Z0-9.]+'
 t_LPAREN = r'\('
 t_RPAREN = r'\)'
 t_LSQUARE = r'\['
@@ -64,9 +64,7 @@ def t_error(t):
     sys.stderr.write("Warning: Illegal character '%s'\n" % t.value[0])
     t.lexer.skip(1)
 
-# Building the lexer
-
-lexer = lex.lex()
+lexer = lex.lex(debug=True)
 
 # Phonemes and features
 
@@ -150,7 +148,7 @@ class Phoneme:
         other : the phoneme which might be a superset
         """
         for feature in self.features.keys():
-            if other.features.has_key(feature):
+            if feature in other.features:
                 if self[feature] != other[feature]:
                     return False
             else:
@@ -186,8 +184,7 @@ class Phoneme:
         other : the phoneme to compare against
         """
         for feature in self.features.keys():
-            if (other.features.has_key(feature) and
-                self[feature] != other[feature]):
+            if feature in other.features and self[feature] != other[feature]:
                 return True
         return False
 
@@ -238,35 +235,41 @@ class Phoneme:
 
 def p_error(p):
     """Fail, and go to the next line."""
-    sys.stderr.write('Syntax error on line %d\n' % p.lexer.lineno)
+    sys.stderr.write('Syntax error on line %d on token %s\n' %
+                     (p.lexer.lineno, p.type))
     while True:
         tok = yacc.token()
         if not tok: break
     yacc.restart()
 
-def p_line_feature(p):
-    'line : feature COLON new_symbols'
-    # None : Phoneme Constant List(String)
-    for symbol in list(p[3]):
+def p_line_features(p):
+    'line : features COLON new_symbols'
+    # None : Phoneme Constant Set(String)
+    for symbol in p[3]:
         if not symbol in symbols: symbols[symbol] = Phoneme()
-        symbols[symbol].update(p[1])
+        symbols[symbol].edit(p[1]) # or update?
         print('%s = %s' % (symbol, symbols[symbol]))
 
-def p_line_symbol(p):
-    'line : ID EQUALS features'
-    # None : String Constant Phoneme
-    if not p[1] in symbols: symbols[p[1]] = p[3]
-    else: symbols[p[1]].edit(p[3])
-    print('%s = %s' % (p[1], symbols[p[1]]))
+def p_line_new_symbols(p):
+    'line : features EQUALS features'
+    # None : Phoneme~Set(String) Constant Phoneme
+    for symbol in p[1].features: # FIXME: This is opaque and relies on
+        if not p[1][symbol]: # implementation details of Phoneme.
+            sys.stderr.write("Syntax error: '-' is not allowed there\n")
+            break
+        # symbol iterates through positive features of a phoneme
+        if not symbol in symbols: symbols[symbol] = Phoneme()
+        symbols[symbol].edit(p[3])
+        print('%s = %s' % (symbol, symbols[symbol]))
 
 def p_new_symbols_base(p):
     'new_symbols : ID'
-    # List(String) : String
+    # Set(String) : String
     p[0] = set([p[1]])
 
 def p_new_symbols_recursive(p):
     'new_symbols : new_symbols ID'
-    # List(String) : List(String) String
+    # List(String) : Set(String) String
     p[1].add(p[2])
     p[0] = p[1]
 
@@ -350,7 +353,7 @@ def add_constraint(key, value):
                       (key, antecedent, consequent, value))
                 del constraints[antecedent]
         if worthwhile:
-            if constraints.has_key(key): constraints[key].edit(value)
+            if key in constraints: constraints[key].edit(value)
             else: constraints[key] = value
 
 def p_implication(p):
