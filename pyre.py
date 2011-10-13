@@ -1,4 +1,4 @@
-#! usr/bin/python
+#! /usr/bin/env python
 # -*- coding: cp1252 -*-
 
 import ply.lex as lex
@@ -307,14 +307,25 @@ def p_features_or_new_symbols_base_explicit(p):
                             | MINUS ID
     '''
     # List(Phoneme, Set(String)) : Boolean String
-    p[0] = [Phoneme({p[2]: p[1]}), set([p[1]])]
+    '''If PLUS or MINUS is present, p[0] must represent a feature. Therefore,
+    p[1][1] will never be used. Instead of adding a string to a useless set,
+    p[1][1] becomes set().'''
+    p[0] = [Phoneme({p[2]: p[1]}), set()]
 
 def p_features_or_new_symbols_base_default(p):
     'features_or_new_symbols : ID'
     # List(Phoneme, Set(String)) : String
     p[0] = [Phoneme({p[1]: True}), set([p[1]])]
 
-def p_features_or_new_symbols_recursive(p):
+def p_features_or_new_symbols_recursive_explicit(p):
+    '''
+    features_or_new_symbols : features_or_new_symbols PLUS ID
+                            | features_or_new_symbols MINUS ID
+    '''
+    # List(Phoneme, Set(String)) : List(Phoneme, Set(String)) String
+    p[0] = [p[1][0].updatei({p[3]: p[2]}), set()]
+
+def p_features_or_new_symbols_recursive_default(p):
     'features_or_new_symbols : features_or_new_symbols ID'
     # List(Phoneme, Set(String)) : List(Phoneme, Set(String)) String
     p[1][1].add(p[2])
