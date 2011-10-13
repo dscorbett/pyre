@@ -114,7 +114,7 @@ class Phoneme:
         signed_strings = []
         for key in sorted(self.features.keys()):
             if self[key]: signed_strings.append('+%s' % key)
-            else: signed_strings.append('-' + key)
+            else: signed_strings.append('-%s' % key)
         return '[%s]' % ' '.join(signed_strings)
 
     def __eq__(self, other):
@@ -165,7 +165,6 @@ class Phoneme:
         Arguments:
         other : the object which might be a subset
         """
-        
         return isinstance(other, Phoneme) and self.issubset(other)
 
     def __hash__(self):
@@ -183,10 +182,7 @@ class Phoneme:
         Arguments:
         other : the phoneme to compare against
         """
-        for feature in self.features.keys():
-            if feature in other.features and self[feature] != other[feature]:
-                return True
-        return False
+        return self.contradictsi(other.features)
 
     def contradictsi(self, features):
         """
@@ -212,11 +208,7 @@ class Phoneme:
         Arguments:
         other : the phoneme to get the new signed features from
         """
-        if self.contradicts(other):
-            sys.stderr.write("Warning: Inconsistent feature update\n")
-        else:
-            self.update(other)
-        return self
+        return self.editi(other.features)
 
     def editi(self, features):
         """
@@ -242,8 +234,7 @@ class Phoneme:
         Arguments:
         other : the phoneme to get the new signed features from
         """
-        self.features.update(other.features)
-        return self
+        return self.updatei(other.features)
 
     def updatei(self, features):
         """
@@ -254,7 +245,9 @@ class Phoneme:
         Arguments:
         features : the dictionary of signed features
         """
-        self.features.update(features)
+        new = self.copy()
+        new.features.update(features)
+        if new.follows_constraints(): self.features = new.features
         return self
 
     def copy(self):
@@ -273,8 +266,25 @@ class Phoneme:
         except KeyError:
             return None
 
-    def follow_implications(self):
-        pass #TODO
+    def follows_constraints(self):
+        """
+        Return whether this phoneme's features do not violate any constraints.
+
+        As a side effect, update this phoneme with any features implied by
+        constraints.
+        """
+        for constraint in constraints:
+            print 'consider %s => %s' % (constraint, constraints[constraint])
+            if constraint.issubset(self):
+                if self.contradicts(constraints[constraint]):
+                    sys.stderr.write('\tError: the phoneme %s violates that '
+                                     'constraint!\n' % self)
+                    return False
+                else:
+                    for feature in constraints[constraint].features:
+                        self.features.update(
+                            {feature: constraints[constraint][feature]})
+        return True
 
 def p_error(p):
     """Fail, and go to the next line."""
