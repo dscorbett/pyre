@@ -188,9 +188,24 @@ class Phoneme:
                 return True
         return False
 
+    def contradictsi(self, features):
+        """
+        Return whether this phoneme contradicts a set of signed features.
+
+        A phoneme contradicts a set of signed features when any feature of the
+        phoneme appears in the set with a different sign.
+
+        Arguments:
+        features : the dictionary of signed features
+        """
+        for feature in self.features.keys():
+            if feature in features and self[feature] != features[feature]:
+                return True
+        return False
+
     def edit(self, other):
         """
-        Add another phoneme's signed features, unless they contradict.
+        Add another phoneme's signed features, unless any contradict.
 
         Return this phoneme.
 
@@ -203,6 +218,21 @@ class Phoneme:
             self.update(other)
         return self
 
+    def editi(self, features):
+        """
+        Add some signed features, unless any contradict.
+
+        Return this phoneme.
+
+        Arguments:
+        features : the dictionary of signed features
+        """
+        if self.contradictsi(features):
+            sys.stderr.write("Warning: Inconsistent feature update\n")
+        else:
+            self.updatei(features)
+        return self
+
     def update(self, other):
         """
         Add another phoneme's signed features, overwriting in case of conflict.
@@ -213,6 +243,19 @@ class Phoneme:
         other : the phoneme to get the new signed features from
         """
         self.features.update(other.features)
+        return self
+
+    def updatei(self, features):
+        """
+        Add some signed features, overwriting in case of conflict.
+
+        Return this phoneme.
+
+        Arguments:
+        features : the dictionary of signed features
+        """
+        self.features.update(features)
+        return self
 
     def copy(self):
         """Return a copy of this phoneme."""
@@ -243,24 +286,39 @@ def p_error(p):
     yacc.restart()
 
 def p_line_features(p):
-    'line : features COLON new_symbols'
-    # None : Phoneme Constant Set(String)
+    'line : features_or_new_symbols COLON new_symbols'
+    # None : List(Phoneme, Set(String)) Constant Set(String)
     for symbol in p[3]:
         if not symbol in symbols: symbols[symbol] = Phoneme()
-        symbols[symbol].edit(p[1]) # or update?
+        symbols[symbol].edit(p[1][0]) # or update?
         print('%s = %s' % (symbol, symbols[symbol]))
 
 def p_line_new_symbols(p):
-    'line : features EQUALS features'
-    # None : Phoneme~Set(String) Constant Phoneme
-    for symbol in p[1].features: # FIXME: This is opaque and relies on
-        if not p[1][symbol]: # implementation details of Phoneme.
-            sys.stderr.write("Syntax error: '-' is not allowed there\n")
-            break
-        # symbol iterates through positive features of a phoneme
+    'line : features_or_new_symbols EQUALS features'
+    # None : List(Phoneme, Set(String)) Constant Phoneme
+    for symbol in p[1][1]:
         if not symbol in symbols: symbols[symbol] = Phoneme()
         symbols[symbol].edit(p[3])
         print('%s = %s' % (symbol, symbols[symbol]))
+
+def p_features_or_new_symbols_base_explicit(p):
+    '''
+    features_or_new_symbols : PLUS ID
+                            | MINUS ID
+    '''
+    # List(Phoneme, Set(String)) : Boolean String
+    p[0] = [Phoneme({p[2]: p[1]}), set([p[1]])]
+
+def p_features_or_new_symbols_base_default(p):
+    'features_or_new_symbols : ID'
+    # List(Phoneme, Set(String)) : String
+    p[0] = [Phoneme({p[1]: True}), set([p[1]])]
+
+def p_features_or_new_symbols_recursive(p):
+    'features_or_new_symbols : features_or_new_symbols ID'
+    # List(Phoneme, Set(String)) : List(Phoneme, Set(String)) String
+    p[1][1].add(p[2])
+    p[0] = [p[1][0].updatei({p[2]: True}), p[1][1]]
 
 def p_new_symbols_base(p):
     'new_symbols : ID'
@@ -295,7 +353,7 @@ def p_feature_explicit(p):
     feature : PLUS ID
             | MINUS ID
     '''
-    # Phoneme : Constant String
+    # Phoneme : Boolean String
     p[0] = Phoneme({f: p[1] for f in set([p[2]])})
 
 def p_feature_default(p):
@@ -357,15 +415,15 @@ def add_constraint(key, value):
             else: constraints[key] = value
 
 def p_implication(p):
-    'line : features IMPLIES features'
-    # None : Phoneme Constant Phoneme
-    add_constraint(p[1], p[3])
+    'line : features_or_new_symbols IMPLIES features'
+    # None : List(Phoneme, Set(String)) Constant Phoneme
+    add_constraint(p[1][0], p[3])
     print constraints
 
 def p_converse_implication(p):
-    'line : features IMPLIEDBY features'
-    # None : Phoneme Constant Phoneme
-    add_constraint(p[3], p[1])
+    'line : features_or_new_symbols IMPLIEDBY features'
+    # None : List(Phoneme, Set(String)) Constant Phoneme
+    add_constraint(p[3], p[1][0])
     print constraints
 
 # Running the program
