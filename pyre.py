@@ -8,37 +8,34 @@ import sys
 
 # Lexing
 
-tokens = ('TO', 'FROM', 'WHEN', 'BETWEEN',
-          'NUMBER', 'ID', 'STAR', 'QUESTION', 'COMMA', 'PIPE',
-          'LPAREN', 'RPAREN', 'LSQUARE', 'RSQUARE', 'LCURLY', 'RCURLY',
+tokens = ('RANG', 'LANG', 'SOL', 'LOWBAR',
+          'NUMBER', 'ID', 'AST', 'QUEST', 'COMMA', 'VERT',
+          'LPAR', 'RPAR', 'LSQB', 'RSQB', 'LCUB', 'RCUB',
           'PLUS', 'MINUS', 'ALPHA', 'NALPHA',
-          'EQUALS', 'COLON', 'IMPLIES', 'IMPLIEDBY', 'EQUIV',
-          'LPHONEME', 'RPHONEME')
+          'EQUALS', 'COLON', 'RARR', 'LARR', 'EQUIV')
 t_ignore = ' \t'
-t_TO = r'>'
-t_FROM = r'<'
-t_WHEN = r'\/'
-t_BETWEEN = r'_'
-t_ID = r'[a-zA-Z0-9.]+'
-t_LPAREN = r'\('
-t_RPAREN = r'\)'
-t_LSQUARE = r'\['
-t_RSQUARE = r'\]'
-t_LCURLY = r'\{'
-t_RCURLY = r'\}'
+t_RANG = r'>'
+t_LANG = r'<'
+t_SOL = r'\/'
+t_LOWBAR = r'_'
+t_ID = r"[a-zA-Z0-9._']+"
+t_LPAR = r'\('
+t_RPAR = r'\)'
+t_LSQB = r'\['
+t_RSQB = r'\]'
+t_LCUB = r'\{'
+t_RCUB = r'\}'
 t_ALPHA = r'@'
 t_NALPHA = r'-@'
-t_STAR = r'\*'
-t_QUESTION = r'\?'
+t_AST = r'\*'
+t_QUEST = r'\?'
 t_COMMA = r','
-t_PIPE = r'\|'
+t_VERT = r'\|'
 t_EQUALS = r'='
 t_COLON = r':'
-t_IMPLIES = r'=>'
-t_IMPLIEDBY = r'<='
+t_RARR = r'=>'
+t_LARR = r'<='
 t_EQUIV = r'=='
-t_LPHONEME = r'`'
-t_RPHONEME = r"'"
 
 def t_PLUS(t):
     r'\+'
@@ -97,12 +94,8 @@ class Phoneme:
         self.features.update({f: False for f in minus})
 
     def __repr__(self):
-        """
-        Return a formal representation of this phoneme as a string.
-
-        Actually, it is not formal.
-        """
-        return str(self)
+        """Return a formal representation of this phoneme as a string."""
+        return 'Phoneme(%s)' % self.features
     
     def __str__(self):
         """
@@ -116,6 +109,11 @@ class Phoneme:
             if self[key]: signed_strings.append('+%s' % key)
             else: signed_strings.append('-%s' % key)
         return '[%s]' % ' '.join(signed_strings)
+
+    def __hash__(self):
+        """Return a hash code for this phoneme."""
+        return (hash(tuple(self.features.keys())) ^
+                hash(tuple(self.features.values())))
 
     def __eq__(self, other):
         """
@@ -137,9 +135,9 @@ class Phoneme:
         """
         return not self == other
 
-    def issubset(self, other):
+    def __le__(self, other):
         """
-        Return whether this phoneme is a subset of another.
+        Return whether this phoneme is a subset of another phoneme.
 
         A phoneme is a subset of another if every feature of the one appears in
         the other with the same sign.
@@ -147,6 +145,8 @@ class Phoneme:
         Arguments:
         other : the phoneme which might be a superset
         """
+        if not isinstance(other, Phoneme):
+            raise TypeError('can only compare to a Phoneme')
         for feature in self.features.keys():
             if feature in other.features:
                 if self[feature] != other[feature]:
@@ -155,22 +155,26 @@ class Phoneme:
                 return False
         return True
 
-    def __le__(self, other):
-        """
-        Return whether this phoneme is a subset of an object.
+    def __lt__(self, other):
+        return self <= other and len(self.features) != len(other.features)
 
-        This is similar to issubset, except that __le__ does not assume that
-        the other object is a phoneme.
+    def __ge__(self, other):
+        return other <= self
+
+    def __gt__(self, other):
+        return other <= self and len(self.features) != len(other.features)
+
+    def __getitem__(self, key):
+        """
+        Return the sign of a feature as a Boolean, or None if it is absent.
 
         Arguments:
-        other : the object which might be a subset
+        key : the feature whose sign is wanted
         """
-        return isinstance(other, Phoneme) and self.issubset(other)
-
-    def __hash__(self):
-        """Return a hash code for this phoneme."""
-        return (hash(tuple(self.features.keys())) ^
-                hash(tuple(self.features.values())))
+        try:
+            return self.features[key]
+        except KeyError:
+            return None
 
     def contradicts(self, other):
         """
@@ -254,18 +258,6 @@ class Phoneme:
         """Return a copy of this phoneme."""
         return Phoneme(self.features)
 
-    def __getitem__(self, key):
-        """
-        Return the sign of a feature as a Boolean, or None if it is absent.
-
-        Arguments:
-        key : the feature whose sign is wanted
-        """
-        try:
-            return self.features[key]
-        except KeyError:
-            return None
-
     def follows_constraints(self):
         """
         Return whether this phoneme's features do not violate any constraints.
@@ -274,10 +266,9 @@ class Phoneme:
         constraints.
         """
         for constraint in constraints:
-            print 'consider %s => %s' % (constraint, constraints[constraint])
-            if constraint.issubset(self):
+            if constraint <= self:
                 if self.contradicts(constraints[constraint]):
-                    sys.stderr.write('\tError: the phoneme %s violates that '
+                    sys.stderr.write('Error: the phoneme %s violates that '
                                      'constraint!\n' % self)
                     return False
                 else:
@@ -288,58 +279,49 @@ class Phoneme:
 
 def p_error(p):
     """Fail, and go to the next line."""
-    sys.stderr.write('Syntax error on line %d on token %s\n' %
-                     (p.lexer.lineno, p.type))
+    try:
+        sys.stderr.write('Syntax error on line %d on token %s\n' %
+                         (p.lexer.lineno, p.type))
+    except AttributeError:
+        sys.stderr.write('Unexpected EOL\n')
     while True:
         tok = yacc.token()
         if not tok: break
     yacc.restart()
 
-def p_line_features(p):
-    'line : features_or_new_symbols COLON new_symbols'
-    # None : List(Phoneme, Set(String)) Constant Set(String)
+def p_line_new_features_ambiguous(p):
+    'line : new_symbols COLON new_symbols'
+    # None : Set(String) Constant Set(String)
+    features = {f: True for f in p[1]}
     for symbol in p[3]:
         if not symbol in symbols: symbols[symbol] = Phoneme()
-        symbols[symbol].edit(p[1][0]) # or update?
+        symbols[symbol].editi(features)
         print('%s = %s' % (symbol, symbols[symbol]))
 
-def p_line_new_symbols(p):
-    'line : features_or_new_symbols EQUALS features'
-    # None : List(Phoneme, Set(String)) Constant Phoneme
-    for symbol in p[1][1]:
+def p_line_new_features(p):
+    'line : features COLON new_symbols'
+    # None : Phoneme Constant Set(String)
+    for symbol in p[3]:
+        if not symbol in symbols: symbols[symbol] = Phoneme()
+        symbols[symbol].edit(p[1])
+        print('%s = %s' % (symbol, symbols[symbol]))
+
+def p_line_new_phonemes_ambiguous(p):
+    'line : new_symbols EQUALS new_symbols'
+    # None : Set(String) Constant Set(String)
+    features = {f: True for f in p[3]}
+    for symbol in p[1]:
+        if not symbol in symbols: symbols[symbol] = Phoneme()
+        symbols[symbol].editi(features)
+        print('%s = %s' % (symbol, symbols[symbol]))
+
+def p_line_new_phonemes(p):
+    'line : new_symbols EQUALS features'
+    # None : Set(String) Constant Phoneme
+    for symbol in p[1]:
         if not symbol in symbols: symbols[symbol] = Phoneme()
         symbols[symbol].edit(p[3])
         print('%s = %s' % (symbol, symbols[symbol]))
-
-def p_features_or_new_symbols_base_explicit(p):
-    '''
-    features_or_new_symbols : PLUS ID
-                            | MINUS ID
-    '''
-    # List(Phoneme, Set(String)) : Boolean String
-    '''If PLUS or MINUS is present, p[0] must represent a feature. Therefore,
-    p[1][1] will never be used. Instead of adding a string to a useless set,
-    p[1][1] becomes set().'''
-    p[0] = [Phoneme({p[2]: p[1]}), set()]
-
-def p_features_or_new_symbols_base_default(p):
-    'features_or_new_symbols : ID'
-    # List(Phoneme, Set(String)) : String
-    p[0] = [Phoneme({p[1]: True}), set([p[1]])]
-
-def p_features_or_new_symbols_recursive_explicit(p):
-    '''
-    features_or_new_symbols : features_or_new_symbols PLUS ID
-                            | features_or_new_symbols MINUS ID
-    '''
-    # List(Phoneme, Set(String)) : List(Phoneme, Set(String)) String
-    p[0] = [p[1][0].updatei({p[3]: p[2]}), set()]
-
-def p_features_or_new_symbols_recursive_default(p):
-    'features_or_new_symbols : features_or_new_symbols ID'
-    # List(Phoneme, Set(String)) : List(Phoneme, Set(String)) String
-    p[1][1].add(p[2])
-    p[0] = [p[1][0].updatei({p[2]: True}), p[1][1]]
 
 def p_new_symbols_base(p):
     'new_symbols : ID'
@@ -369,30 +351,39 @@ def p_features_recursive(p):
     p[1].update(p[2])
     p[0] = p[1]
 
-def p_feature_explicit(p):
+def p_features_recursive_ambiguous(p):
+    '''
+    features : new_symbols feature
+             | new_symbols phoneme
+    '''
+    # Phoneme : Set(String) Phoneme
+    p[2].updatei({f: True for f in p[1]})
+    p[0] = p[2]
+
+def p_features_recursive_ambiguous(p):
+    'features : features ID'
+    # Phoneme : Phoneme String
+    p[1].updatei({p[2]: True})
+    p[0] = p[1]
+
+def p_feature(p):
     '''
     feature : PLUS ID
             | MINUS ID
     '''
     # Phoneme : Boolean String
-    p[0] = Phoneme({f: p[1] for f in set([p[2]])})
-
-def p_feature_default(p):
-    'feature : ID'
-    # Phoneme : String
-    p[0] = Phoneme({f: True for f in set([p[1]])})
+    p[0] = Phoneme({p[2]: p[1]})
 
 def p_phoneme(p):
-    'phoneme : LPHONEME valid_symbol RPHONEME'
+    'phoneme : SOL valid_phoneme SOL'
     # Phoneme : Constant Phoneme Constant
     p[0] = p[2]
 
 def p_valid_symbol(p):
-    'valid_symbol : ID'
+    'valid_phoneme : ID'
     # Phoneme : String
     if not p[1] in symbols:
-        sys.stderr.write('Error: No such phoneme %s%s%s\n' %
-                         (t_LPHONEME, p[1], t_RPHONEME))
+        sys.stderr.write('Error: No such phoneme /%s/\n' % p[1])
         raise SyntaxError
     p[0] = symbols[p[1]].copy()
 
@@ -423,38 +414,74 @@ def add_constraint(key, value):
             #   worthwhile = False
             #   break
             if antecedent <= key and value <= consequent:
-                print('%s <= %s and %s <= %s' %
-                      (antecedent, key, value, consequent))
+                #print('%s <= %s and %s <= %s' %
+                #      (antecedent, key, value, consequent))
                 worthwhile = False
                 break
             if key <= antecedent and consequent <= value:
-                print('%s <= %s and %s <= %s' %
-                      (key, antecedent, consequent, value))
+                #print('%s <= %s and %s <= %s' %
+                #      (key, antecedent, consequent, value))
                 del constraints[antecedent]
         if worthwhile:
             if key in constraints: constraints[key].edit(value)
             else: constraints[key] = value
 
+def p_implication_ambiguous_lr(p):
+    'line : new_symbols RARR new_symbols'
+    # None : Set(String) Constant Set(String)
+    add_constraint(Phoneme({f: True for f in p[1]}),
+                   Phoneme({f: True for f in p[3]}))
+    print(constraints)
+
+def p_implication_ambiguous_l(p):
+    'line : new_symbols RARR features'
+    # None : Set(String) Constant Phoneme
+    add_constraint(Phoneme({f: True for f in p[1]}), p[3])
+    print(constraints)
+
+def p_implication_ambiguous_r(p):
+    'line : features RARR new_symbols'
+    # None : Phoneme Constant Set(String)
+    add_constraint(p[1], Phoneme({f: True for f in p[3]}))
+    print(constraints)
+
 def p_implication(p):
-    'line : features_or_new_symbols IMPLIES features'
-    # None : List(Phoneme, Set(String)) Constant Phoneme
-    add_constraint(p[1][0], p[3])
-    print constraints
+    'line : features RARR features'
+    # None : Phoneme Constant Phoneme
+    add_constraint(p[1], p[3])
+    print(constraints)
+
+def p_converse_implication_ambiguous_lr(p):
+    'line : new_symbols LARR new_symbols'
+    # None : Set(String) Constant Set(String)
+    add_constraint(Phoneme({f: True for f in p[3]}),
+                   Phoneme({f: True for f in p[1]}))
+    print(constraints)
+
+def p_converse_implication_ambiguous_l(p):
+    'line : new_symbols LARR features'
+    # None : Set(String) Constant Phoneme
+    add_constraint(p[3], Phoneme({f: True for f in p[1]}))
+    print(constraints)
+
+def p_converse_implication_ambiguous_r(p):
+    'line : features LARR new_symbols'
+    # None : Phoneme Constant Set(String)
+    add_constraint(Phoneme({f: True for f in p[3]}), p[1])
+    print(constraints)
 
 def p_converse_implication(p):
-    'line : features_or_new_symbols IMPLIEDBY features'
-    # None : List(Phoneme, Set(String)) Constant Phoneme
-    add_constraint(p[3], p[1][0])
-    print constraints
+    'line : features LARR features'
+    # None : Phoneme Constant Phoneme
+    add_constraint(p[3], p[1])
+    print(constraints)
 
 # Running the program
 
-parser = yacc.yacc()
+parser = yacc.yacc(start='line')
 while True:
-   try:
-       s = raw_input('Babel > ')
-   except EOFError:
-       break
-   if not s: continue
-   result = parser.parse(s)
-   print(result)
+    try: s = raw_input('> ')
+    except EOFError: break
+    if not s: continue
+    result = parser.parse(s)
+    print(result)
