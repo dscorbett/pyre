@@ -159,7 +159,15 @@ class Phoneme:
         return self <= other and len(self.features) != len(other.features)
 
     def __ge__(self, other):
-        return other <= self
+        if not isinstance(other, Phoneme):
+            raise TypeError('can only compare to a Phoneme')
+        for feature in other.features.keys():
+            if feature in self.features:
+                if self[feature] != other[feature]:
+                    return False
+            else:
+                return False
+        return True
 
     def __gt__(self, other):
         return other <= self and len(self.features) != len(other.features)
