@@ -44,7 +44,7 @@ A ConstraintSet implements:
 
 class Feature:
     def __init__(self, values=set()):
-        self._values = values
+        self._values = set(values)
 
     def __eq__(self, other):
         return isinstance(other, Feature) and self._values == other._values
@@ -74,9 +74,39 @@ class Feature:
         self._values.clear()
         return self
 
+class FeatureSet:
+    def __init__(self, features={}):
+        self._features = dict(features)
+
+    def __getitem__(self, key):
+        if not isinstance(key, str):
+            raise TypeError('key must be a string')
+        return self._features[key]
+
+    def contains(self, feature):
+        return feature in self._features
+
+    def update(self, key, value):
+        self._features.update({key: value})
+
+features = FeatureSet()
+
 class Constraint:
     def __init__(self, feature1, value1, feature2, value2, boolean1=True,
-                 boolean2=True):
+                 boolean2=True, featureset=features):
+        if not featureset.contains(feature1):
+            raise KeyError('no feature [%s] found' % feature1)
+        if not featureset.contains(feature2):
+            raise KeyError('no feature [%s] found' % feature2)
+        if feature1 == feature2:
+            raise StandardError('a feature cannot imply itself')
+        if not featureset[feature1].contains(value1):
+            raise KeyError('[%s] is not a value in [%s]' %
+                                (value1, feature1))
+        if not featureset[feature2].contains(value2):
+            raise KeyError('[%s] is not a value in [%s]' %
+                                (value2, feature2))
+        self.features = featureset
         if feature2 < feature1:
             self.boolean1 = not boolean2
             self.feature1 = feature2
@@ -114,34 +144,27 @@ class Constraint:
                 hash(self.boolean2) ^ hash(self.feature2) ^ hash(self.value2))  
 
 class ConstraintSet:
-    def __init__(self):
-        self._constraints = set()
+    def __init__(self, constraints=set()):
+        self._features = features
+        self._constraints = constraints
 
     def __str__(self):
         return '[\n%s\n]' % '\n'.join(['%s' % c for c in self._constraints])
 
     def overwrite(self, constraint):
+        return self.add(constraint, raise_error=False)
+
+    def add(self, constraint, raise_error=True):
         for c in self._constraints.copy():
             if ((c.feature1 == constraint.feature1) and
                 (c.feature2 == constraint.feature2) and
                 (c.value1 == constraint.value1) and
                 (c.value2 == constraint.value2)):
+                if raise_error and ((c.boolean1 == constraint.boolean1) ^
+                                    (c.boolean2 == constraint.boolean2)):
+                    raise StandardError('%s violates %s' % (c, constraint))
                 self.discard(c)
                 break
-        self._constraints.add(constraint)
-        return self
-
-    def add(self, constraint):
-        for c in self._constraints.copy():
-            if ((c.feature1 == constraint.feature1) and
-                (c.feature2 == constraint.feature2) and
-                (c.value1 == constraint.value1) and
-                (c.value2 == constraint.value2)):
-                if ((c.boolean1 == constraint.boolean1) ^
-                    (c.boolean2 == constraint.boolean2)):
-                    raise StandardError('%s violates %s' % (c, constraint))
-                else:
-                    self._constraints.remove(c)
         self._constraints.add(constraint)
         return self
 
