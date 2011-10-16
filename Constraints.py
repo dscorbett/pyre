@@ -12,7 +12,7 @@ A Feature implements:
     contains(value String) :
         Return whether the given value is legal for this feature.
     discard(value String) :
-        Remove the given value, if boolean.
+        Remove the given value, if present.
     clear() :
         Remove all values.
 
@@ -23,6 +23,9 @@ A Constrant has:
     boolean2 Boolean
     feature2 String
     value2 String
+A Constraint implements:
+    conflicts(Constraint) :
+        Return whether this constraint conflicts with the given constraint.
 
 A ConstraintSet has:
     constraints set(Constraint) :
@@ -40,6 +43,8 @@ A ConstraintSet implements:
     discard(constraint Constraint) :
         Discard the given constraint, without raising an error if it is not
         present.
+    allows(phoneme Phoneme) :
+        Return whether the given phoneme violates any constraints.
 """
 
 class Feature:
@@ -88,12 +93,13 @@ class FeatureSet:
 
     def update(self, key, value):
         self._features.update({key: value})
+        return self
 
-features = FeatureSet()
+universal_features = FeatureSet()
 
 class Constraint:
     def __init__(self, feature1, value1, feature2, value2, boolean1=True,
-                 boolean2=True, featureset=features):
+                 boolean2=True, featureset=universal_features):
         if not featureset.contains(feature1):
             raise KeyError('no feature [%s] found' % feature1)
         if not featureset.contains(feature2):
@@ -123,11 +129,12 @@ class Constraint:
             self.value2 = value2
 
     def __str__(self):
-        if self.boolean1: s = ''
-        else: s = '!'
-        s = '%s%s::%s => ' % (s, self.feature1, self.value1)
-        if not self.boolean2: s = '%s!' % s
-        s = '%s%s::%s' % (s, self.feature2, self.value2)
+        if self.boolean1: s = '( '
+        else: s = '(!'
+        s = '%s%s:%s => ' % (s, self.feature1, self.value1)
+        if self.boolean2: s = '%s ' % s
+        else: s = '%s!' % s
+        s = '%s%s:%s)' % (s, self.feature2, self.value2)
         return s
 
     def __eq__(self, other):
@@ -141,12 +148,27 @@ class Constraint:
 
     def __hash__(self):
         return (hash(self.boolean1) ^ hash(self.feature1) ^ hash(self.value1) ^
-                hash(self.boolean2) ^ hash(self.feature2) ^ hash(self.value2))  
+                hash(self.boolean2) ^ hash(self.feature2) ^ hash(self.value2))
+
+    def conflicts(self, other):
+        if ((self.feature1 == other.feature1) and
+            (self.feature2 == other.feature2)):
+            same_value1 = self.value1 == other.value1
+            same_value2 = self.value2 == other.value2
+            same_boolean1 = self.boolean1 == other.boolean1
+            same_boolean2 = self.boolean2 == other.boolean2
+            same1 = same_value1 == same_boolean1
+            same2 = same_value2 == same_boolean2
+            positive = self.boolean2 or (same_value2 and not same_boolean2)
+            return same1 and not same2 and positive
+        else:
+            return False
 
 class ConstraintSet:
     def __init__(self, constraints=set()):
-        self._features = features
-        self._constraints = constraints
+        self._constraints = set([])
+        for constraint in constraints:
+            self.add(constraint)
 
     def __str__(self):
         return '[\n%s\n]' % '\n'.join(['%s' % c for c in self._constraints])
@@ -154,21 +176,45 @@ class ConstraintSet:
     def overwrite(self, constraint):
         return self.add(constraint, raise_error=False)
 
-    def add(self, constraint, raise_error=True):
+    def add(self, new, raise_error=True):
         for c in self._constraints.copy():
-            if ((c.feature1 == constraint.feature1) and
-                (c.feature2 == constraint.feature2) and
-                (c.value1 == constraint.value1) and
-                (c.value2 == constraint.value2)):
-                if raise_error and ((c.boolean1 == constraint.boolean1) ^
-                                    (c.boolean2 == constraint.boolean2)):
-                    raise StandardError('%s violates %s' % (c, constraint))
+            if c.conflicts(new):
+                if raise_error:
+                    raise StandardError('%s violates %s' % (c, new))
                 self.discard(c)
                 break
-        self._constraints.add(constraint)
+        self._constraints.add(new)
+        # TODO: Recursively add everything that this constraint implies.
         return self
 
     def discard(self, constraint):
         self._constraints.discard(constraint)
 
-constraints = ConstraintSet()
+    def allows(self, phoneme):
+        for constraint in self._constraints:
+            if self.contradicts(constraints[constraint]):
+                sys.stderr.write('Error: the phoneme %s violates that '
+                                 'constraint!\n' % self)
+                return False
+            else:
+                for feature in constraints[constraint].features:
+                    self.features.update(
+                        {feature: constraints[constraint][feature]})
+        return True
+
+universal_constraints = ConstraintSet()
+
+# For testing
+
+p = Feature(['+', '-'])
+q = Feature(['+', '-'])
+universal_features.update('p', p)
+universal_features.update('q', q)
+ctt = Constraint('p', '+', 'q', '+', True, True)
+ctf = Constraint('p', '+', 'q', '+', True, False)
+cft = Constraint('p', '+', 'q', '+', False, True)
+cff = Constraint('p', '+', 'q', '+', False, False)
+cstt = ConstraintSet([ctt])
+cstf = ConstraintSet([ctf])
+csft = ConstraintSet([cft])
+csff = ConstraintSet([cff])
