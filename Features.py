@@ -49,9 +49,15 @@ class Phoneme:
                 raise StandardError('Illegal value %s' % features[f])
         self._features = dict(features)
 
+    def __eq__(self, other):
+        return isinstance(other, Phoneme) and other._features == self._features
+
+    def __hash__(self):
+        return hash(tuple(self._features.items()))
+
     def __getitem__(self, key):
         return self._features[key]
-
+    
     def __repr__(self):
         return 'Phoneme(%s)' % self._features
 
@@ -70,8 +76,10 @@ class Alphabet:
     """
     An Alphabet is a mapping from single-character symbols to phonemes.
     """
-    def __init__(self, symbols={}):
+    def __init__(self, symbols={}, placeholder='*'):
         self._symbols = dict(symbols)
+        self._phonemes = dict([[ph, s] for s, ph in symbols.items()])
+        self.placeholder = placeholder
 
     def __getitem__(self, key):
         return self._symbols[key]
@@ -85,8 +93,13 @@ class Alphabet:
     def contains_feature(self, feature):
         return feature in self._symbols.values()
 
-    def update(self, key, value):
-        self._features.update({key: value})
+    def update(self, symbol, phoneme):
+        self._symbols.update({symbol: phoneme})
+        self._phonemes.update({phoneme: symbol})
+        return self
+
+    def delete(self, symbol):
+        del self._symbols[symbol]
         return self
 
     def parse(self, string):
@@ -95,7 +108,7 @@ class Alphabet:
         character in the string as a symbol in this alphabet.
 
         Arguments:
-        string : the string to parse
+        string : a string to parse
         """
         features = []
         for char in string:
@@ -105,6 +118,17 @@ class Alphabet:
                 raise StandardError('The symbol <%s> is not part of this '
                                     'alphabet' % char)
         return features
+
+    def symbolize(self, phonemes):
+        """
+        Convert a list of phonemes into a string by finding the appropriate
+        symbol in this alphabet for each phoneme's value.
+
+        Arguments:
+        phonemes : a list of phonemes
+        """
+        return ''.join(self._phonemes[phm] if phm in self._phonemes else
+                       self.placeholder for phm in phonemes)
 
 universal_alphabet = Alphabet()
 
