@@ -1,6 +1,17 @@
 #! /usr/bin/env python
 
-class Feature:
+class Node:
+    def __init__(self):
+        self._children = set()
+
+    def __repr__(self):
+        return 'Node()%s' % ''.join(['.add(%s)' % n for n in self._children])
+
+    def add(self, node):
+        self._children.add(node)
+        return self
+
+class Feature(Node):
     """
     A Feature represents a distinctive feature, such as [voice] or [sonorant].
     A Feature can have any number of possible values. For example, [POA] (i.e.
@@ -9,12 +20,6 @@ class Feature:
     """
     def __init__(self, values=set()):
         self._values = set(values)
-
-    def __eq__(self, other):
-        return isinstance(other, Feature) and self._values == other._values
-    
-    def __hash__(self):
-        return hash(frozenset(self._values))
 
     def __repr__(self):
         return 'Feature(%s)' % self._values
@@ -134,10 +139,23 @@ universal_alphabet = Alphabet()
 
 # Testing
 
+root = Node()
+laryngeal = Node()
+supralaryngeal = Node()
+manner = Node()
+place = Node()
+
 nasal = Feature('+')
 voice = Feature('+-')
-poa = Feature(['lab', 'cor', 'dors', 'rad'])
+coronal = Feature('+-~') # [~coronal] is just for testing.
 
+root.add(laryngeal)
+root.add(supralaryngeal)
+laryngeal.add(voice)
+supralaryngeal.add(manner).add(place)
+manner.add(nasal)
+place.add(coronal)
+"""
 m = Phoneme({nasal: '+', voice: '+', poa: 'lab'})
 n = Phoneme({nasal: '+', voice: '+', poa: 'cor'})
 ng = Phoneme({nasal: '+', voice: '+', poa: 'dors'})
@@ -153,3 +171,4 @@ sampa = Alphabet({'m': m, 'n': n, 'N': ng, 'b': b, 'd': d, 'g': g, 'p': p,
                   't': t, 'k': k, '?': gs})
 other = Alphabet({'M': m, 'N': n, '~': ng, 'B': b, 'D': d, 'G': g, 'P': p,
                   'T': t, 'K': k, "'": gs})
+"""
