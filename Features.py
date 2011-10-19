@@ -2,14 +2,26 @@
 
 class Node:
     def __init__(self):
-        self._children = set()
+        self._hierarchy = {}
 
     def __repr__(self):
-        return 'Node()%s' % ''.join(['.add(%s)' % n for n in self._children])
+        return str(self)
 
-    def add(self, node):
-        self._children.add(node)
-        return self
+    def __str__(self):
+        return '#%s#' % str(self._hierarchy)
+
+    def __getitem__(self, key):
+        return self._hierarchy[key]
+
+    def add(self, child):
+        if child in self._hierarchy:
+            raise StandardError('The child is already present in the '
+                                'hierarchy.')
+        self._hierarchy.update({child: self})
+        try:
+            self._hierarchy.update(child._hierarchy)
+        except AttributeError:
+            pass
 
 class Feature(Node):
     """
@@ -19,29 +31,10 @@ class Feature(Node):
     and 'radical'.
     """
     def __init__(self, values=set()):
-        self._values = set(values)
+        self.values = set(values)
 
     def __repr__(self):
-        return 'Feature(%s)' % self._values
-
-    def add(self, value):
-        self._values.add(value)
-        return self
-
-    def update(self, values):
-        self._values.update(values)
-        return self
-
-    def contains(self, value):
-        return value in self._values
-
-    def discard(self, value):
-        self._values.discard(value)
-        return self
-
-    def clear(self):
-        self._values.clear()
-        return self
+        return 'Feature(%s)' % self.values
 
 class Phoneme:
     """
@@ -52,59 +45,47 @@ class Phoneme:
         for f in features:
             if not f.contains(features[f]):
                 raise StandardError('Illegal value %s' % features[f])
-        self._features = dict(features)
+        self.features = dict(features)
 
     def __eq__(self, other):
-        return isinstance(other, Phoneme) and other._features == self._features
+        try:
+            return other.features == self.features
+        except AttributeError:
+            return False
 
     def __hash__(self):
-        return hash(tuple(self._features.items()))
+        return hash(tuple(self.features.items()))
 
     def __getitem__(self, key):
-        return self._features[key]
+        return self.features[key]
     
     def __repr__(self):
-        return 'Phoneme(%s)' % self._features
-
-    def contains(self, feature):
-        return feature in self._features
-
-    def update(self, key, value):
-        self._features.update({key: value})
-        return self
-
-    def remove(self, key):
-        del self._features[key]
-        return self
+        return 'Phoneme(%s)' % self.features
 
 class Alphabet:
     """
     An Alphabet is a mapping from single-character symbols to phonemes.
     """
     def __init__(self, symbols={}, placeholder='*'):
-        self._symbols = dict(symbols)
-        self._phonemes = dict([[ph, s] for s, ph in symbols.items()])
+        self.symbols = dict(symbols)
+        self.phonemes = dict([[ph, s] for s, ph in symbols.items()])
         self.placeholder = placeholder
 
     def __getitem__(self, key):
-        return self._symbols[key]
+        return self.symbols[key]
 
     def __repr__(self):
-        return 'Alphabet(%s)' % self._symbols
+        return 'Alphabet(%s)' % self.symbols
 
     def contains_symbol(self, symbol):
-        return symbol in self._symbols
+        return symbol in self.symbols
 
     def contains_feature(self, feature):
-        return feature in self._symbols.values()
+        return feature in self.symbols.values()
 
     def update(self, symbol, phoneme):
-        self._symbols.update({symbol: phoneme})
-        self._phonemes.update({phoneme: symbol})
-        return self
-
-    def delete(self, symbol):
-        del self._symbols[symbol]
+        self.symbols.update({symbol: phoneme})
+        self.phonemes.update({phoneme: symbol})
         return self
 
     def parse(self, string):
@@ -117,8 +98,8 @@ class Alphabet:
         """
         features = []
         for char in string:
-            if char in self._symbols:
-                features.append(self._symbols[char])
+            if char in self.symbols:
+                features.append(self.symbols[char])
             else:
                 raise StandardError('The symbol <%s> is not part of this '
                                     'alphabet' % char)
@@ -132,7 +113,7 @@ class Alphabet:
         Arguments:
         phonemes : a list of phonemes
         """
-        return ''.join(self._phonemes[phm] if phm in self._phonemes else
+        return ''.join(self.phonemes[phm] if phm in self.phonemes else
                        self.placeholder for phm in phonemes)
 
 universal_alphabet = Alphabet()
@@ -152,7 +133,8 @@ coronal = Feature('+-~') # [~coronal] is just for testing.
 root.add(laryngeal)
 root.add(supralaryngeal)
 laryngeal.add(voice)
-supralaryngeal.add(manner).add(place)
+supralaryngeal.add(manner)
+supralaryngeal.add(place)
 manner.add(nasal)
 place.add(coronal)
 """
