@@ -27,7 +27,7 @@ class Feature(Node):
     """
     A Feature represents a distinctive feature, such as [voice] or [sonorant].
     A Feature can have any number of possible values. For example, [POA] (i.e.
-    [place of articulation]) could have values 'labial', 'coronal', 'dorsal',
+    [place of articulation]) might have values 'labial', 'coronal', 'dorsal',
     and 'radical'.
     """
     def __init__(self, values=set()):
@@ -43,7 +43,7 @@ class Phoneme:
     """
     def __init__(self, features={}):
         for f in features:
-            if not f.contains(features[f]):
+            if not features[f] in f.values:
                 raise StandardError('Illegal value %s' % features[f])
         self.features = dict(features)
 
@@ -128,7 +128,7 @@ place = Node()
 
 nasal = Feature('+')
 voice = Feature('+-')
-coronal = Feature('+-~') # [~coronal] is just for testing.
+labial = Feature('+-~') # [~labial] is just for testing.
 
 root.add(laryngeal)
 root.add(supralaryngeal)
@@ -136,21 +136,20 @@ laryngeal.add(voice)
 supralaryngeal.add(manner)
 supralaryngeal.add(place)
 manner.add(nasal)
-place.add(coronal)
-"""
-m = Phoneme({nasal: '+', voice: '+', poa: 'lab'})
-n = Phoneme({nasal: '+', voice: '+', poa: 'cor'})
-ng = Phoneme({nasal: '+', voice: '+', poa: 'dors'})
-b = Phoneme({voice: '+', poa: 'lab'})
-d = Phoneme({voice: '+', poa: 'cor'})
-g = Phoneme({voice: '+', poa: 'dors'})
-p = Phoneme({voice: '-', poa: 'lab'})
-t = Phoneme({voice: '-', poa: 'cor'})
-k = Phoneme({voice: '-', poa: 'dors'})
-gs = Phoneme({voice: '-', poa: 'rad'})
+place.add(labial)
+
+m = Phoneme({nasal: '+', voice: '+', labial: '+'})
+n = Phoneme({nasal: '+', voice: '+', labial: '-'})
+ng = Phoneme({nasal: '+', voice: '+', labial: '~'})
+b = Phoneme({voice: '+', labial: '+'})
+d = Phoneme({voice: '+', labial: '-'})
+g = Phoneme({voice: '+', labial: '~'})
+p = Phoneme({voice: '-', labial: '+'})
+t = Phoneme({voice: '-', labial: '-'})
+k = Phoneme({voice: '-', labial: '~'})
+gs = Phoneme({voice: '-', labial: '~'})
 
 sampa = Alphabet({'m': m, 'n': n, 'N': ng, 'b': b, 'd': d, 'g': g, 'p': p,
                   't': t, 'k': k, '?': gs})
 other = Alphabet({'M': m, 'N': n, '~': ng, 'B': b, 'D': d, 'G': g, 'P': p,
                   'T': t, 'K': k, "'": gs})
-"""
