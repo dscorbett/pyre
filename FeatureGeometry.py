@@ -13,6 +13,9 @@ class FeatureGeometry:
     def __getitem__(self, key):
         return self._geometry[key]
 
+    def __contains__(self, key):
+        return key in self._geometry
+
     def add(self, name, values='+', parent=None, children=[]):
         """
         Add a new feature to this feature geometry.

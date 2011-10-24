@@ -1,19 +1,23 @@
 #! /usr/bin/env python
 
-class Phoneme:
+from FeatureGeometry import *
+
+class Segment:
     """
-    A Phoneme is a mapping of features to values. No feature may have more than
-    one value; however, a feature may be associated with no value.
+    A Segment is a mapping of features to values. No feature may have more than
+    one value; however, a feature may be unspecified.
     """
-    def __init__(self, features={}):
+    def __init__(self, geometry, features={}, segments=[]):
+        self.segments = list(segments)
+        self.set_geometry(geometry)
+        self.features = {}
         for f in features:
-            if not features[f] in f.values:
-                raise StandardError('Illegal value %s' % features[f])
-        self.features = dict(features)
+            self.add_feature(f, features[f])
 
     def __eq__(self, other):
         try:
-            return other.features == self.features
+            return (other.features == self.features and
+                    other.geometry == self.geometry)
         except AttributeError:
             return False
 
@@ -21,10 +25,36 @@ class Phoneme:
         return hash(tuple(self.features.items()))
 
     def __getitem__(self, key):
-        return self.features[key]
-    
-    def __repr__(self):
-        return 'Phoneme(%s)' % self.features
+        try:
+            return self.features[key]
+        except:
+            return self.segments[key]
+
+    def __str__(self, indent=0):
+        s = []
+        for f in self.features:
+            s.append('%s[%s %s]' % (' ' * indent, f, self.features[f]))
+        s = '\n'.join(s)
+        i = 0
+        for seg in self.segments:
+            s += '\n%sSegment %s:' % (' ' * indent, i)
+            s += '\n%s' % seg.__str__(indent + 1)
+        return s
+
+    def add_feature(self, feature, value):
+        if not feature in self.geometry:
+            raise StandardError('Illegal feature [%s]' % feature)
+        if not value in self.geometry[feature].values:
+            raise StandardError("Illegal value '%s'" % value)
+        self.features.update({feature: value})
+
+    def add(self, segment):
+        self.segments.append(segment)
+        segment.set_geometry(self.geometry)
+
+    def set_geometry(self, geometry):
+        self.geometry = geometry
+        for s in self.segments: s.set_geometry(geometry)
 
 class Alphabet:
     """
