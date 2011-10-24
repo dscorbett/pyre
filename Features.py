@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
-from FeatureGeometry import *
+from FeatureGeometry import FeatureGeometry
+from FeatureGeometry import features as fg
 
 class Segment:
     """
@@ -8,15 +9,18 @@ class Segment:
     one value; however, a feature may be unspecified.
     """
     def __init__(self, geometry, features={}, segments=[]):
-        self.segments = list(segments)
-        self.set_geometry(geometry)
+        self.geometry = geometry
         self.features = {}
+        self.segments = []
         for f in features:
             self.add_feature(f, features[f])
+        for s in segments:
+            self.add_segment(s, len(self.segments))
 
     def __eq__(self, other):
         try:
             return (other.features == self.features and
+                    other.segments == self.segments and
                     other.geometry == self.geometry)
         except AttributeError:
             return False
@@ -39,6 +43,7 @@ class Segment:
         for seg in self.segments:
             s += '\n%sSegment %s:' % (' ' * indent, i)
             s += '\n%s' % seg.__str__(indent + 1)
+            i += 1
         return s
 
     def add_feature(self, feature, value):
@@ -48,13 +53,24 @@ class Segment:
             raise StandardError("Illegal value '%s'" % value)
         self.features.update({feature: value})
 
-    def add(self, segment):
-        self.segments.append(segment)
-        segment.set_geometry(self.geometry)
+    def add_segment(self, segment, index):
+        self.segments[index:index] = [segment]
 
-    def set_geometry(self, geometry):
-        self.geometry = geometry
-        for s in self.segments: s.set_geometry(geometry)
+    def add(self, features={}, segments=[], index=None):
+        """
+        Add a new segment to this word at the given index. If no index is
+        provided, it appends the new segment to the end.
+
+        Arguments:
+        features : a mapping from features to values (strings)
+        Optional arguments:
+        index : the numerical index, starting at 0, of the new segment
+        """
+        segment = Segment(self.geometry, features, segments)
+        if segment.geometry != self.geometry:
+            raise StandardError('Different geometries are incompatible')
+        if index is None: index = len(self.segments)
+        self.add_segment(segment, index)
 
 class Alphabet:
     """
