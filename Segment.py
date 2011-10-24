@@ -8,14 +8,14 @@ class Segment:
     A Segment is a mapping of features to values. No feature may have more than
     one value; however, a feature may be unspecified.
     """
-    def __init__(self, geometry, features={}, segments=[]):
+    def __init__(self, geometry=None, features={}, segments=[]):
         self.geometry = geometry
-        self.features = {}
         self.segments = []
-        for f in features:
-            self.add_feature(f, features[f])
+        self.features = {}
         for s in segments:
             self.add_segment(s, len(self.segments))
+        for f in features:
+            self.add_feature(f, features[f])
 
     def __eq__(self, other):
         try:
@@ -54,6 +54,9 @@ class Segment:
         self.features.update({feature: value})
 
     def add_segment(self, segment, index):
+        if segment.geometry != self.geometry:
+            if self.geometry is None: self.geometry = segment.geometry
+            else: raise StandardError('Different geometries are incompatible')
         self.segments[index:index] = [segment]
 
     def add(self, features={}, segments=[], index=None):
@@ -67,10 +70,22 @@ class Segment:
         index : the numerical index, starting at 0, of the new segment
         """
         segment = Segment(self.geometry, features, segments)
-        if segment.geometry != self.geometry:
-            raise StandardError('Different geometries are incompatible')
         if index is None: index = len(self.segments)
         self.add_segment(segment, index)
+
+p = Segment(fg, {'voice':'-', 'place':'lab'})
+b = Segment(fg, {'voice':'+', 'place':'lab'})
+m = Segment(fg, {'voice':'+', 'place':'lab', 'nasal':'+'})
+t = Segment(fg, {'voice':'-', 'place':'cor'})
+d = Segment(fg, {'voice':'+', 'place':'cor'})
+n = Segment(fg, {'voice':'+', 'place':'cor', 'nasal':'+'})
+k = Segment(fg, {'voice':'-', 'place':'dors'})
+g = Segment(fg, {'voice':'+', 'place':'dors'})
+ng = Segment(fg, {'voice':'+', 'place':'dors', 'nasal':'+'})
+h = Segment(fg, {'voice':'-', 'place':'rad'})
+hh = Segment(fg, {'voice':'+', 'place':'rad'})
+
+tmp = Segment(segments=[t, m, p])
 
 class Alphabet:
     """
@@ -129,17 +144,6 @@ class Alphabet:
 universal_alphabet = Alphabet()
 
 """
-m = Phoneme({nasal: '+', voice: '+', labial: '+'})
-n = Phoneme({nasal: '+', voice: '+', labial: '-'})
-ng = Phoneme({nasal: '+', voice: '+', labial: '~'})
-b = Phoneme({voice: '+', labial: '+'})
-d = Phoneme({voice: '+', labial: '-'})
-g = Phoneme({voice: '+', labial: '~'})
-p = Phoneme({voice: '-', labial: '+'})
-t = Phoneme({voice: '-', labial: '-'})
-k = Phoneme({voice: '-', labial: '~'})
-gs = Phoneme({voice: '-', labial: '~'})
-
 sampa = Alphabet({'m': m, 'n': n, 'N': ng, 'b': b, 'd': d, 'g': g, 'p': p,
                   't': t, 'k': k, '?': gs})
 other = Alphabet({'M': m, 'N': n, '~': ng, 'B': b, 'D': d, 'G': g, 'P': p,

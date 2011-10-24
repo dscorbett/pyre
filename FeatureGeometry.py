@@ -94,6 +94,6 @@ features.add('supralaryngeal', parent='root')
 
 features.add('voice', '+-', 'laryngeal')
 features.add('manner', parent='supralaryngeal')
-features.add('place', ['lab', 'cor', 'dors', 'phar'], parent='supralaryngeal')
+features.add('place', ['lab', 'cor', 'dors', 'rad'], parent='supralaryngeal')
 
 features.add('nasal', parent='manner')
